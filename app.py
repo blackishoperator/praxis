@@ -173,14 +173,14 @@ def main():
 	while statusFlags['connected'] == True:
 		status, reason, stream = user.connect()
 		rspn = stream.decode('utf-8')
-		print("-" * 100)
+		#print("-" * 100)
 		#print(rspn)
 		jList = split(rspn)
 		for json in jList:
 			jsonThread = threading.Thread(target=jsonParser, args=(json, str(index), roomId, ))
 			jsonThread.start()
 			index += 1
-			print(json)
+			#print(json)
 		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
 			statusFlags['connected'] = False
 		if index > 24:
