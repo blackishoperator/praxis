@@ -94,7 +94,7 @@ def spam(i, message, roomId, txt) :
 	ban = 0
 	ch = 100
 	locerr = 0
-	print("thread started")
+	#print("thread started")
 	while True :
 		if locerr > 400:
 			print("[thread #" + str(i) + "]: exited.")
@@ -103,12 +103,11 @@ def spam(i, message, roomId, txt) :
 		cntId = 2
 		seed = str(ch)
 		usrnme = txt + seed + str(i) + "wicked" + str(i) + seed[2] + seed[1] + seed[0] + txt
-		#try:
+		try:
 		rspn = register(usrnme)
-		#except:
-			#locerr = locerr + 1
-			#print "[thread #" + str(i) + "]: error in login, trying..."
-			#continue
+		except:
+			locerr = locerr + 1
+			continue
 		srt = rspn.find("\r\n\r\n100")
 		if srt <= 0 :
 			srt = rspn.find("\r\n\r\n15")
@@ -129,23 +128,21 @@ def spam(i, message, roomId, txt) :
 		start = rspn.find("JSESSIONID")
 		end = rspn.find(";", start)
 		cookie = rspn[start:end]
-		#try:
+		try:
 		string = handshake(cookie, roomId)
-		#except:
-			#locerr = locerr + 1
-			#print "[thread #" + str(i) + "]: error in handshake, trying..."
-			#continue
+		except:
+			locerr = locerr + 1
+			continue
 		index = string.find('|')
 		cookie = cookie + "; " + string[:index]
 		clntId = string[index+1:]
 		num = 0
 		while num < 3 :
-			#try:
+			try:
 			rspn = cometd(cookie, clntId, str(cntId), message)
-			#except:
-				#locerr = locerr + 1
-				#print "[thread #" + str(i) + "]: error in cometd, trying..."
-				#continue
+			except:
+				locerr = locerr + 1
+				continue
 			cntId = cntId + 1
 			num = num + 1
 			check = rspn.find("\"successful\":true")
