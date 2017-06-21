@@ -97,6 +97,7 @@ def spam(i, message, roomId, txt) :
 		if locerr > 400:
 			print "[thread #" + str(i) + "]: exited."
 			break
+<<<<<<< HEAD
 		ch = ch + 1
 		cntId = 2
 		seed = str(ch)
@@ -164,6 +165,51 @@ def main() :
 		t = Thread(target=spam, args=(i, message, roomId, txt))
 		threads.append(t)
 		t.start()
+=======
+		end = end + 1
+		jsonList.append(rspn[start:end])
+		start = end + 1
+	return jsonList
+
+def main():
+	index = 0
+	username = "awkward_silence"
+	password = "frlm"
+	roomId = "209803"
+	user = MyUser(username, password, roomId) #username password roomId
+	status, reason, stream = user.login()
+	#status, reason, stream = user.guest()
+	#print("-" * 25, "login", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.handshake()
+	#print("-" * 25, "handshake", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.metacon()
+	#print("-" * 25, "metacon", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.context()
+	#print("-" * 25, "context", "-" * 25)
+	#print(str(stream))
+	statusFlags['connected'] = True
+	while statusFlags['connected'] == True:
+		status, reason, stream = user.connect()
+		rspn = stream.decode('utf-8')
+		#print("-" * 100)
+		#print(rspn)
+		jList = split(rspn)
+		for json in jList:
+			jsonThread = threading.Thread(target=jsonParser, args=(json, str(index), roomId, ))
+			jsonThread.start()
+			index += 1
+			#print(json)
+		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
+			statusFlags['connected'] = False
+		if index > 24:
+			index = 0
+	status, reason, stream = user.logout()
+	#print(str(stream))
+	return
+>>>>>>> d5f13c4701d2a1d510fa4669fad121838c67f0eb
 
 if __name__ == '__main__' :
 	main()
