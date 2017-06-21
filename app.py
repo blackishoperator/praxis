@@ -112,7 +112,7 @@ def spam(i, message, roomId, txt) :
 			srt = rspn.find("\r\n\r\n15")
 			if srt > 0 :
 				print("[error]: generic, trying...")
-				print "[recv]:\n" + rspn + "\n"
+				print("[recv]:\n" + rspn + "\n")
 				continue
 			srt = rspn.find("\r\n\r\n12")
 			if srt > 0 :
