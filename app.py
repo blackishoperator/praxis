@@ -12,9 +12,6 @@ direct = ["/authentication/guest",	#0
 		  "/cometd/"]				#5
 
 statusFlags = {'connected': False, 'terminated': False}
-users = {}
-fakeList = [False, False, False, False, False]
-guests = ["breathing_corpse", "solmaz", "razor", "salad shirazi", "biqam"]
 
 class MyUser():
 	def __init__(self, usrnme, passwd, roomId):
@@ -88,7 +85,7 @@ class MyUser():
 		body = "[{\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\",\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
 		self.cntId += 1
 		return self.send_recv("POST", 4, body)
-		
+
 	def context(self):
 		body = "[{\"channel\":\"/service/user/context/self/complete\",\"data\":{},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
 		self.cntId += 1
@@ -115,36 +112,27 @@ class MyUser():
 		return self.send_recv("POST", 5, body.encode('utf-8'))
 
 def jsonParser(json, seed, roomId):
-	if json.find("/chatroom/message/add") >= 0:
+	if json.find("/chatroom/message/add") >= 0 and json.find("e\":\"&shy;") < 0:
 		start = json.find("\"messageBody\"")
 		end = json.find("\",", start)
 		start = start + 15
-		usertext = json[start:end]
-		usertext = html.unescape(usertext)
-		start = json.find("\"username\"")
-		end = json.find("\"}", start)
-		start = start + 12
-		username = json[start:end]
-		username = html.unescape(username)
-		print("[STATUS]: Text $ \"" + username + "\" : \"" + usertext + "\"")
-	elif json.find("/chatroom/user/joined") >= 0:
-		start = json.find("\"userUuid\"")
-		end = json.find("\",", start)
-		start = start + 12
-		userUuid = json[start:end]
-		start = json.find("\"username\"")
-		end = json.find("\"}", start)
-		start = start + 12
-		username = json[start:end]
-		users[userUuid] = username
-		print("[STATUS]: Join $ \"" + username + "\"")
-	elif json.find("/chatroom/user/left") >= 0:
-		start = json.find("\"data\"")
-		end = json.find("\",", start)
-		start = start + 7
-		userUuid = json[start + 1:end]
-		if userUuid in users :
-			print("[STATUS]: Left $ \"" + users[userUuid] + "\"")
+		echoText = json[start:end]
+		#objc = html.parser.HTMLParser()
+		echoText = html.unescape(echoText)
+		#echoText = unicode(echoText, "utf-8")
+		#echoer = "-%C2%AD" + chr(random.randint(69, 90)) + "-"
+		echoer = "%C2%AD" + json[21:28] + seed + "%C2%AD"
+		user = MyUser(echoer, "", roomId)
+		status, reason, stream = user.guest()
+		status, reason, stream = user.handshake()
+		try:
+			status, reason, stream = user.message(echoText)
+		except:
+			status, reason, stream = user.logout()
+			return
+			#status, reason, stream = user.message("Shush You!")
+			#wxyz = 0
+		status, reason, stream = user.logout()
 	return
 
 def split(rspn) :
@@ -162,51 +150,28 @@ def split(rspn) :
 		start = end + 1
 	return jsonList
 
-def joinRoom(username, password, roomId):
-	user = MyUser(username, password, roomId) #username password roomId
-	if password != "":
-		status, reason, stream = user.login()
-	else:
-		status, reason, stream = user.guest()
-	status, reason, stream = user.handshake()
-	status, reason, stream = user.metacon()
-	status, reason, stream = user.context()
-	return user
-
-def fakeUser(i, username, password, roomId):
-	user = joinRoom(username, password, roomId) #username password roomId
-	fakeList[i] = True
-	while fakeList[i] == True:
-		try:
-			status, reason, stream = user.connect()
-		except:
-			user = joinRoom(username, password, roomId)
-			continue
-		rspn = stream.decode('utf-8')
-		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
-			fakeList[i] = False
-			#print("[STATUS]: \"" + username + "\" Disconnected")
-	status, reason, stream = user.logout()
-	return
-
 def main():
+	index = 0
 	username = "awkward_silence"
 	password = "frlm"
-	roomId = "215315"
-	GuestThreads = []
-	for i in range(5) :
-		guestThread = threading.Thread(target=fakeUser, args=(i, guests[i], "frlm", roomId, ))
-		GuestThreads.append(guestThread)
-		guestThread.start()
-	index = 0
-	user = joinRoom(username, password, roomId) #username password roomId
+	roomId = "207920"
+	user = MyUser(username, password, roomId) #username password roomId
+	status, reason, stream = user.login()
+	#status, reason, stream = user.guest()
+	#print("-" * 25, "login", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.handshake()
+	#print("-" * 25, "handshake", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.metacon()
+	#print("-" * 25, "metacon", "-" * 25)
+	#print(str(stream))
+	status, reason, stream = user.context()
+	#print("-" * 25, "context", "-" * 25)
+	#print(str(stream))
 	statusFlags['connected'] = True
 	while statusFlags['connected'] == True:
-		try:
-			status, reason, stream = user.connect()
-		except:
-			user = joinRoom(username, password, roomId)
-			continue
+		status, reason, stream = user.connect()
 		rspn = stream.decode('utf-8')
 		#print("-" * 100)
 		#print(rspn)
@@ -218,12 +183,8 @@ def main():
 			#print(json)
 		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
 			statusFlags['connected'] = False
-		if index > 5:
+		if index > 24:
 			index = 0
-		#print("[STATUS]: \"" + username + "\" Connected")
-		for x in range(5):
-			if fakeList[x] == False:
-				print("[STATUS]: Fake $ \"" + guests[x] + "\" # Disconnected")
 	status, reason, stream = user.logout()
 	#print(str(stream))
 	return
