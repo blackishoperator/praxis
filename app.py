@@ -1,169 +1,232 @@
 #!/usr/bin/env python
 
-import socket
-import random
-from threading import Thread
+import http.client
+import threading
+import html
 
-method0 = "POST http://e-chat.co/authentication/guest HTTP/1.1\r\n"
-method1 = "POST http://e-chat.co/authentication/registration/new HTTP/1.1\r\n"
-method2 = "POST http://e-chat.co/cometd/handshake HTTP/1.1\r\n"
-method3 = "POST http://e-chat.co/cometd/connect HTTP/1.1\r\n"
-method4 = "POST http://e-chat.co/cometd/ HTTP/1.1\r\n"
-method5 = "GET http://e-chat.co/account/logout HTTP/1.1\r\n"
+direct = ["/authentication/guest",	#0
+		  "/authentication/login",	#1
+		  "/account/logout",		#2
+		  "/cometd/handshake",		#3
+		  "/cometd/connect",		#4
+		  "/cometd/"]				#5
 
-header0 = "Host: e-chat.co\r\n"
-header1 = "Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n"
-header2 = "Content-Type: application/json; charset=UTF-8\r\n"
-header3 = "Referer: http://e-chat.co/browse\r\n"
-header4 = "Referer: http://e-chat.co/room/163173\r\n"
-header5 = "Content-Length: "
-header6 = "Cookie: "
+statusFlags = {'connected': False, 'terminated': False}
+users = {}
+fakeList = [False, False, False, False, False]
+guests = ["breathing_corpse", "solmaz", "razor", "salad shirazi", "biqam"]
 
-bodies0 = "username=&password=8&rememberAuthDetails=false\r\n" #for registered users
-bodies1 = "[{\"ext\":{\"chatroomId\":},\"version\":\"1.0\",\"minimumVersion\":\"0.9\",\"channel\":\"/meta/handshake\",\"supportedConnectionTypes\":[\"long-polling\",\"callback-polling\"],\"advice\":{\"timeout\":60000,\"interval\":0},\"id\":\"1\"}]"
-bodies2 = "[{\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\",\"advice\":{\"timeout\":0},\"id\":\""
-bodies3 = "[{\"channel\":\"/service/chatroom/message\",\"data\":{\"messageBody\":\""
+class MyUser():
+	def __init__(self, usrnme, passwd, roomId):
+		self.usrnme = usrnme
+		self.passwd = passwd
+		self.roomId = roomId
+		self.cookie = ''
+		self.clntId = ''
+		self.cntId = 2
+		self.conn = http.client.HTTPConnection("e-chat.co")
+		self.conn.connect()
 
-def cometd(cookie, clntId, cntId, text) :
-	rqst = method4 + header0 + header2 + header6 + cookie + "\r\n" + header5 + str(76 + len(clntId) + len(cntId) + len(text)) + "\r\n\r\n" + bodies3 + text + "\"},\"id\":\"" + cntId + "\"," + clntId + "}]"
-	rspn = request(rqst, "cometd")
-	return rspn
+	def send_recv(self, method, iLink, body):
+		rparams = []
+		headers = {}
+		headers["Host"] = "e-chat.co"
+		if iLink != 2:
+			headers["Connection"] = "keep-alive"
+		if iLink < 2:
+			headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+		elif iLink > 2:
+			headers["Content-Type"] = "application/json; charset=UTF-8"
+		if body != None:
+			headers["Content-Length"] = str(len(body))
+		if self.cookie != '':
+			headers["Cookie"] = self.cookie
+		self.conn.request(method, direct[iLink], body, headers)
+		rspn = self.conn.getresponse()
+		status = rspn.status
+		reason = rspn.reason
+		hdlist = rspn.getheaders()
+		stream = rspn.read()
+		rspn.close()
+		for tup in hdlist:
+			if "Set-Cookie" in tup:
+				newCookie = tup[1][:tup[1].find(";")]
+				if self.cookie != '':
+					self.cookie = self.cookie + ";" + newCookie
+				else:
+					self.cookie = newCookie
+		return status, reason, stream
 
-def connect(cookie, clntId, cntId) :
-	rqst = method3 + header0 + header2 + header6 + cookie + "\r\n" + header5 + str(93 + len(clntId) + len(cntId)) + "\r\n\r\n" + bodies2 + cntId + "\"," + clntId + "}]"
-	rspn = request(rqst, "connect")
-	return rspn
+	def guest(self):
+		body = "username=" + self.usrnme
+		return self.send_recv("POST", 0, body)
 
-def handshake(cookie, roomId) :
-	rqst = method2 + header0 + header2 + header6 + cookie + "\r\n" + header5 + str(204 + len(roomId)) + "\r\n\r\n" + bodies1[:22] + roomId + bodies1[22:] + "\r\n"
-	rspn = request(rqst, "handshake")
-	start = rspn.find("BAYEUX_BROWSER")
-	end = rspn.find(";", start)
-	string = rspn[start:end] + '|'
-	start = rspn.find("\"clientId\"")
-	end = rspn.find(",", start)
-	string = string + rspn[start:end]
-	return string
+	def login(self):
+		body = "username=" + self.usrnme + "&password=" + self.passwd + "&rememberAuthDetails=false"
+		return self.send_recv("POST", 1, body)
 
-def register(usrnme) :
-	rqst = method1 + header0 + header1 + header5 + str(46 + len(usrnme)) + "\r\n\r\n" + bodies0[:9] + usrnme + bodies0[9:] + "\r\n"
-	rspn = request(rqst, "register")
-	return rspn
+	def logout(self):
+		status, reason, stream = self.send_recv("POST", 2, None)
+		self.conn.close()
+		return status, reason, stream
 
-def logout(cookie) :
-	rqst = method5 + header0 + header4 + header6 + cookie + "\r\n\r\n"
-	rspn = request(rqst, "logout")
-	return rspn
+	def handshake(self):
+		body = "[{\"ext\":{\"chatroomId\":" + self.roomId + "},\"version\":\"1.0\",\"minimumVersion\":\"0.9\",\"channel\":\"/meta/handshake\",\"supportedConnectionTypes\":[\"long-polling\",\"callback-polling\"],\"advice\":{\"timeout\":60000,\"interval\":0},\"id\":\"1\"}]"
+		status, reason, stream = self.send_recv("POST", 3, body)
+		rspn = str(stream)
+		start = rspn.find("\"clientId\"")
+		end = rspn.find(",", start)
+		self.clntId = rspn[start:end]
+		return status, reason, stream
 
-def request(rqst, name) :
-	#print '_' * 200
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.connect(("www.e-chat.co", 80))
-	#print "\n[send: " + name + "]\n" + rqst
-	sock.send(rqst.encode())
-	#print "\n[recv: " + name + "]"
-	rspn = b''
-	num = ""
-	eof = [b'\r', b'\n', b'\r', b'\n']
-	cnt = 0
-	flag = True
-	while flag :
-		char = sock.recv(1)
-		if char != '' :
-			rspn = rspn + char
-		if  char == eof[cnt]:
-			cnt = cnt + 1
-			if cnt == 4 :
-				flag = False
-		else :
-			cnt = 0
-	temp = rspn.decode()
-	index = temp.find("Content-Length: ")
-	index = index + 16
-	while temp[index].isdigit() :
-		num = num + temp[index]
-		index = index + 1
-	body = sock.recv(int(num))
-	rspn = rspn + body
-	sock.close()
-	#print rspn
-	#print '_' * 200
-	return rspn.decode()
+	def metacon(self):
+		body = "[{\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\",\"advice\":{\"timeout\":0},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 4, body)
 
-def spam(i, message, roomId, txt) :
-	ban = 0
-	ch = 100
-	locerr = 0
-	#print("thread started")
+	def connect(self):
+		body = "[{\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\",\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 4, body)
+		
+	def context(self):
+		body = "[{\"channel\":\"/service/user/context/self/complete\",\"data\":{},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body)
+
+	def message(self, text):
+		body = "[{\"channel\":\"/service/chatroom/message\",\"data\":{\"messageBody\":\"" + text + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body.encode('utf-8'))
+
+	def openbox(self, convId):
+		body = "[{\"channel\":\"/service/conversation/opened\",\"data\":{\"conversationUserUuid\":\"" + convId + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body)
+
+	def closbox(self, convId):
+		body = "[{\"channel\":\"/service/conversation/closed\",\"data\":{\"conversationUserUuid\":\"" + convId + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body)
+
+	def private(self, convId, text):
+		body = "[{\"channel\":\"/service/conversation/message\",\"data\":{\"conversationUserUuid\":\"" + convId + "\",\"messageBody\":\"" + text + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body.encode('utf-8'))
+
+def jsonParser(json, seed, roomId):
+	if json.find("/chatroom/message/add") >= 0:
+		start = json.find("\"messageBody\"")
+		end = json.find("\",", start)
+		start = start + 15
+		usertext = json[start:end]
+		usertext = html.unescape(usertext)
+		start = json.find("\"username\"")
+		end = json.find("\"}", start)
+		start = start + 12
+		username = json[start:end]
+		username = html.unescape(username)
+		print("[STATUS]: Text $ \"" + username + "\" : \"" + usertext + "\"")
+	elif json.find("/chatroom/user/joined") >= 0:
+		start = json.find("\"userUuid\"")
+		end = json.find("\",", start)
+		start = start + 12
+		userUuid = json[start:end]
+		start = json.find("\"username\"")
+		end = json.find("\"}", start)
+		start = start + 12
+		username = json[start:end]
+		users[userUuid] = username
+		print("[STATUS]: Join $ \"" + username + "\"")
+	elif json.find("/chatroom/user/left") >= 0:
+		start = json.find("\"data\"")
+		end = json.find("\",", start)
+		start = start + 7
+		userUuid = json[start + 1:end]
+		if userUuid in users :
+			print("[STATUS]: Left $ \"" + users[userUuid] + "\"")
+	return
+
+def split(rspn) :
+	jsonList = []
+	start = rspn.find("[{")
+	start = start + 1
 	while True :
-		if locerr > 400:
-			print("[thread #" + str(i) + "]: exited.")
+		end = rspn.find("},{", start)
+		if end < 0 :
+			end = rspn.find("]")
+			jsonList.append(rspn[start:end])
 			break
-		ch = ch + 1
-		cntId = 2
-		seed = str(ch)
-		usrnme = txt + seed + str(i) + "wicked" + str(i) + seed[2] + seed[1] + seed[0] + txt
-		try:
-			rspn = register(usrnme)
-		except:
-			locerr = locerr + 1
-			continue
-		srt = rspn.find("\r\n\r\n100")
-		if srt <= 0 :
-			srt = rspn.find("\r\n\r\n15")
-			if srt > 0 :
-				print("[error]: generic, trying...")
-				print("[recv]:\n" + rspn + "\n")
-				continue
-			srt = rspn.find("\r\n\r\n12")
-			if srt > 0 :
-				print("[error]: used, trying...")
-				print("[recv]:\n" + rspn + "\n")
-				continue
-			srt = rspn.find("\r\n\r\n16")
-			if srt > 0 :
-				print("[error]: banned, exiting...")
-				print("[recv]:\n" + rspn + "\n")
-				break
-		start = rspn.find("JSESSIONID")
-		end = rspn.find(";", start)
-		cookie = rspn[start:end]
-		try:
-			string = handshake(cookie, roomId)
-		except:
-			locerr = locerr + 1
-			continue
-		index = string.find('|')
-		cookie = cookie + "; " + string[:index]
-		clntId = string[index+1:]
-		num = 0
-		while num < 3 :
-			try:
-				rspn = cometd(cookie, clntId, str(cntId), message)
-			except:
-				locerr = locerr + 1
-				continue
-			cntId = cntId + 1
-			num = num + 1
-			check = rspn.find("\"successful\":true")
-			if check < 0 :
-				break
-		#ban = ban + 1
-	print("[thread #" + str(i) + "]: finished.")
+		end = end + 1
+		jsonList.append(rspn[start:end])
+		start = end + 1
+	return jsonList
 
-def main() :
-	#message = raw_input("message: ")
-	#roomId = raw_input("roomId: ")
-	#txt = raw_input("txt: ")
-	message = "Buy a Zippo"
-	roomId = "888"
-	txt = chr(random.randint(97, 122)) + chr(random.randint(97, 122)) + chr(random.randint(97, 122)) + chr(random.randint(97, 122))
-	threads = []
-	print(txt)
-	for i in range(8) :
-		t = Thread(target=spam, args=(i, message, roomId, txt))
-		threads.append(t)
-		t.start()
+def joinRoom(username, password, roomId):
+	user = MyUser(username, password, roomId) #username password roomId
+	if password != "":
+		status, reason, stream = user.login()
+	else:
+		status, reason, stream = user.guest()
+	status, reason, stream = user.handshake()
+	status, reason, stream = user.metacon()
+	status, reason, stream = user.context()
+	return user
+
+def fakeUser(i, username, password, roomId):
+	user = joinRoom(username, password, roomId) #username password roomId
+	fakeList[i] = True
+	while fakeList[i] == True:
+		try:
+			status, reason, stream = user.connect()
+		except:
+			user = joinRoom(username, password, roomId)
+			continue
+		rspn = stream.decode('utf-8')
+		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
+			fakeList[i] = False
+			#print("[STATUS]: \"" + username + "\" Disconnected")
+	status, reason, stream = user.logout()
+	return
+
+def main():
+	username = "awkward_silence"
+	password = "frlm"
+	roomId = "215315"
+	GuestThreads = []
+	for i in range(5) :
+		guestThread = threading.Thread(target=fakeUser, args=(i, guests[i], "frlm", roomId, ))
+		GuestThreads.append(guestThread)
+		guestThread.start()
+	index = 0
+	user = joinRoom(username, password, roomId) #username password roomId
+	statusFlags['connected'] = True
+	while statusFlags['connected'] == True:
+		try:
+			status, reason, stream = user.connect()
+		except:
+			user = joinRoom(username, password, roomId)
+			continue
+		rspn = stream.decode('utf-8')
+		#print("-" * 100)
+		#print(rspn)
+		jList = split(rspn)
+		for json in jList:
+			jsonThread = threading.Thread(target=jsonParser, args=(json, str(index), roomId, ))
+			jsonThread.start()
+			index += 1
+			#print(json)
+		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
+			statusFlags['connected'] = False
+		if index > 5:
+			index = 0
+		#print("[STATUS]: \"" + username + "\" Connected")
+		for x in range(5):
+			if fakeList[x] == False:
+				print("[STATUS]: Fake $ \"" + guests[x] + "\" # Disconnected")
+	status, reason, stream = user.logout()
+	#print(str(stream))
+	return
 
 if __name__ == '__main__' :
 	main()
