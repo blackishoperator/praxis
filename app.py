@@ -60,11 +60,11 @@ def request(rqst, name) :
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	sock.connect(("www.e-chat.co", 80))
 	#print "\n[send: " + name + "]\n" + rqst
-	sock.send(rqst)
+	sock.send(rqst.encode())
 	#print "\n[recv: " + name + "]"
-	rspn = ""
+	rspn = b''
 	num = ""
-	eof = ['\r', '\n', '\r', '\n']
+	eof = [b'\r', b'\n', b'\r', b'\n']
 	cnt = 0
 	flag = True
 	while flag :
@@ -77,22 +77,24 @@ def request(rqst, name) :
 				flag = False
 		else :
 			cnt = 0
-	index = rspn.find("Content-Length: ")
+	temp = rspn.decode()
+	index = temp.find("Content-Length: ")
 	index = index + 16
-	while rspn[index].isdigit() :
-		num = num + rspn[index]
+	while temp[index].isdigit() :
+		num = num + temp[index]
 		index = index + 1
 	body = sock.recv(int(num))
 	rspn = rspn + body
 	sock.close()
 	#print rspn
 	#print '_' * 200
-	return rspn
+	return rspn.decode()
 
 def spam(i, message, roomId, txt) :
 	ban = 0
 	ch = 100
 	locerr = 0
+	print("thread started")
 	while True :
 		if locerr > 400:
 			print("[thread #" + str(i) + "]: exited.")
@@ -101,12 +103,12 @@ def spam(i, message, roomId, txt) :
 		cntId = 2
 		seed = str(ch)
 		usrnme = txt + seed + str(i) + "wicked" + str(i) + seed[2] + seed[1] + seed[0] + txt
-		try:
-			rspn = register(usrnme)
-		except:
-			locerr = locerr + 1
+		#try:
+		rspn = register(usrnme)
+		#except:
+			#locerr = locerr + 1
 			#print "[thread #" + str(i) + "]: error in login, trying..."
-			continue
+			#continue
 		srt = rspn.find("\r\n\r\n100")
 		if srt <= 0 :
 			srt = rspn.find("\r\n\r\n15")
@@ -127,23 +129,23 @@ def spam(i, message, roomId, txt) :
 		start = rspn.find("JSESSIONID")
 		end = rspn.find(";", start)
 		cookie = rspn[start:end]
-		try:
-			string = handshake(cookie, roomId)
-		except:
+		#try:
+		string = handshake(cookie, roomId)
+		#except:
 			#locerr = locerr + 1
 			#print "[thread #" + str(i) + "]: error in handshake, trying..."
-			continue
+			#continue
 		index = string.find('|')
 		cookie = cookie + "; " + string[:index]
 		clntId = string[index+1:]
 		num = 0
 		while num < 3 :
-			try:
-				rspn = cometd(cookie, clntId, str(cntId), message)
-			except:
+			#try:
+			rspn = cometd(cookie, clntId, str(cntId), message)
+			#except:
 				#locerr = locerr + 1
 				#print "[thread #" + str(i) + "]: error in cometd, trying..."
-				continue
+				#continue
 			cntId = cntId + 1
 			num = num + 1
 			check = rspn.find("\"successful\":true")
@@ -157,9 +159,10 @@ def main() :
 	#roomId = raw_input("roomId: ")
 	#txt = raw_input("txt: ")
 	message = "Buy a Zippo"
-	roomId = "205841"
+	roomId = "888"
 	txt = chr(random.randint(97, 122)) + chr(random.randint(97, 122)) + chr(random.randint(97, 122)) + chr(random.randint(97, 122))
 	threads = []
+	print(txt)
 	for i in range(8) :
 		t = Thread(target=spam, args=(i, message, roomId, txt))
 		threads.append(t)
