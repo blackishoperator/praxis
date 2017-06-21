@@ -183,7 +183,7 @@ def main():
 			print(json)
 		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
 			statusFlags['connected'] = False
-		if index > 5:
+		if index > 24:
 			index = 0
 	status, reason, stream = user.logout()
 	#print(str(stream))
