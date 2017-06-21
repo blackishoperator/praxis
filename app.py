@@ -104,7 +104,7 @@ def spam(i, message, roomId, txt) :
 		seed = str(ch)
 		usrnme = txt + seed + str(i) + "wicked" + str(i) + seed[2] + seed[1] + seed[0] + txt
 		try:
-		rspn = register(usrnme)
+			rspn = register(usrnme)
 		except:
 			locerr = locerr + 1
 			continue
@@ -129,7 +129,7 @@ def spam(i, message, roomId, txt) :
 		end = rspn.find(";", start)
 		cookie = rspn[start:end]
 		try:
-		string = handshake(cookie, roomId)
+			string = handshake(cookie, roomId)
 		except:
 			locerr = locerr + 1
 			continue
@@ -139,7 +139,7 @@ def spam(i, message, roomId, txt) :
 		num = 0
 		while num < 3 :
 			try:
-			rspn = cometd(cookie, clntId, str(cntId), message)
+				rspn = cometd(cookie, clntId, str(cntId), message)
 			except:
 				locerr = locerr + 1
 				continue
