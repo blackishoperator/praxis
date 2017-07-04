@@ -13,7 +13,7 @@ direct = ["/authentication/guest",	#0
 
 statusFlags = {'connected': False, 'terminated': False}
 users = {}
-fakeList = [False, False, False, False, False]
+fakeList = [False, False, False, False, False, False]
 guests = ["awkward_silence", "breathing_corpse", "solmaz", "razor", "salad shirazi", "biqam", "Iran_Is_Safe", "GrumpyPersianCat"]
 muteList = []
 
