@@ -15,7 +15,7 @@ badWords = ["fuck", "shit", "scum", "retarded", "sex", "rape", "ass", "arse", "c
 parsOdds = [u"\u06A9\u06CC\u0631", u"\u06A9\u0648\u0633", u"\u062C\u0642", u"\u062C\u0646\u062F\u0647"]
 userList = []
 muteList = []
-fakeList = ["awkward_silence", "breathing_corpse", "solmaz", "razor", "salad shirazi", "biqam"]
+fakeList = ["awkward_silence", "solmaz", "razor"]
 
 class ChatUser():
 	def __init__(self, username, userUuid, isGuest):
@@ -70,7 +70,6 @@ class ChatUser():
 			self.mute = False
 		self.lastText = userText
 		self.dataLock.release()
-		#self.printUser()
 		return
 
 	def isMuted(self):
@@ -98,19 +97,6 @@ class ChatUser():
 		attrList.append("mute: " + str(self.mute))
 		attrList.append("spam: " + str(self.spam))
 		return attrList
-
-	def printUser(self):
-		print("username:", self.username)
-		print("userUuid:", self.userUuid)
-		print("lastText:", self.lastText)
-		print("repeated:", self.repeated)
-		print("isGuest:", self.isGuest)
-		print("capital:", self.capital)
-		print("inMute:", self.inMute)
-		print("swear:", self.swear)
-		print("mute:", self.mute)
-		print("spam:", self.spam)
-		return
 
 class ModUser():
 	def __init__(self, usrnme, passwd, roomId):
@@ -340,7 +326,6 @@ def addMessage(json, mod):
 	userUuid = json[start:end]
 	if username in muteList:
 		status, reason, stream = mod.removetext(userUuid)
-		#roomData()
 		return
 	i = findUser(userUuid)
 	if i >= 0:
@@ -373,7 +358,6 @@ def userJoin(json, mod):
 		return
 	newUser = ChatUser(username, userUuid, isGuest)
 	userList.append(newUser)
-	#roomData()
 	#print("[debug]: new user joined")
 	return
 
@@ -390,7 +374,6 @@ def userLeft(json, mod):
 			status, reason, stream = mod.removetext(user.userUuid)
 		if user.spam >= 4:
 			status, reason, stream = mod.userban(user.userUuid)
-	#roomData()
 	#print("[debug]: user left")
 	return
 
@@ -484,17 +467,6 @@ def seekUser(username):
 			break
 	return result
 
-def roomData():
-	print("-" * 97, "open", "-" * 97)
-	if len(userList) <= 0:
-		print("-" * 200)
-		print("no online user")
-	for user in userList:
-		print("-" * 200)
-		user.printUser()
-	print("-" * 97, "clos", "-" * 97)
-	return
-
 def joinRoom(username, password, roomId, check):
 	user = ModUser(username, password, roomId) #username password roomId
 	if password != "":
@@ -531,10 +503,27 @@ def getText(rspn):
 	userText = html.unescape(rspn[start + 12:end - 20])
 	return userText
 
+def fakeUser(username, password, roomId):
+	fake = joinRoom(username, password, roomId, False)
+	while fake.isAlive() == True:
+		try:
+			status, reason, stream = fake.connect()
+		except:
+			fake = joinRoom(username, password, roomId, False)
+			continue
+		rspn = stream
+		if rspn.find("\"error\":\"402::Unknown client\"") >= 0:
+			fake.updateState(False)
+	status, reason, stream = fake.logout()
+	return
+
 def main():
 	username = "Iran_Is_Safe"
 	password = "frlm"
 	roomId = "215315" #207920 #215315
+	for fake in fakeList:
+		fakeThread = threading.Thread(target=fakeUser, args=(fake, password, roomId, ))
+		fakeThread.start()
 	user = joinRoom(username, password, roomId, False) #username password roomId
 	while user.isAlive() == True:
 		try:
