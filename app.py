@@ -3,6 +3,7 @@
 import http.client
 import threading
 import html
+import time
 
 direct = ["/authentication/guest",	#0
 		  "/authentication/login",	#1
@@ -12,10 +13,12 @@ direct = ["/authentication/guest",	#0
 		  "/cometd/"]				#5
 
 badWords = ["fuck", "shit", "scum", "retarded", "sex", "rape", "ass", "arse", "cunt", "wank", "bitch", "whore", "gay", "homo", "dick", "cock", "penis", "kir", "kos", "jaq", "jende"]
-parsOdds = [u"\u06A9\u06CC\u0631", u"\u06A9\u0648\u0633", u"\u062C\u0642", u"\u062C\u0646\u062F\u0647"]
+parsOdds = [u"\u06A9\u06CC\u0631", u"\u06A9\u0648\u0633", u"\u062C\u0642", u"\u062C\u0646\u062F\u0647", u"\u06A9\u0648\u0646", u"\u0645\u0645\u0647"]
 userList = []
 muteList = []
+muidList = []
 fakeList = ["awkward_silence", "solmaz", "razor"]
+frndDict = {}
 
 class ChatUser():
 	def __init__(self, username, userUuid, isGuest):
@@ -32,15 +35,15 @@ class ChatUser():
 		self.mute = False
 		self.spam = 0
 		#if isGuest == True:
-			#self.repLimit = 2
-			#self.capLimit = 8
-			#self.swrLimit = 2
-			#self.mutLimit = 8
+		#	self.repLimit = 2
+		#	self.capLimit = 8
+		#	self.swrLimit = 2
+		#	self.mutLimit = 8
 		#else:
-			#self.repLimit = 2
-			#self.capLimit = 8
-			#self.swrLimit = 2
-			#self.mutLimit = 4
+		#	self.repLimit = 4
+		#	self.capLimit = 8
+		#	self.swrLimit = 4
+		#	self.mutLimit = 4
 
 	def checkUser(self, userText):
 		self.dataLock.acquire()
@@ -54,7 +57,7 @@ class ChatUser():
 				self.swear += 1
 		for abuse in parsOdds:
 			if lowCase.find(abuse) >= 0:
-				self.swear += 1
+				self.swear += 2
 		if self.repeated >= 2 or self.capital >= 16 or self.swear >= 2:
 			self.repeated = 0
 			self.capital = 0
@@ -179,6 +182,16 @@ class ModUser():
 					self.cookie = newCookie
 		return status, reason, stream.decode('utf-8')
 
+	def addfriend(self, friendUuid):
+		body = "[{\"channel\":\"/service/friends/add\",\"data\":{\"userUuid\":\"" + friendUuid + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body)
+
+	def removefriend(self, friendUuid):
+		body = "[{\"channel\":\"/service/friends/remove\",\"data\":{\"userUuid\":\"" + friendUuid + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
+		self.cntId += 1
+		return self.send_recv("POST", 5, body)
+
 	def removetext(self, targetUuid):
 		body = "[{\"channel\":\"/service/moderator/messages/remove\",\"data\":{\"targetUserUuid\":\"" + targetUuid + "\"},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
 		self.cntId += 1
@@ -279,7 +292,6 @@ class ModUser():
 		rspn = html.unescape(stream)
 		index = 0
 		start = 0
-		end = 0
 		while index < len(rspn):
 			start = rspn.find("\"userUuid\"", start)
 			if start < 0:
@@ -325,6 +337,9 @@ def addMessage(json, mod):
 	start = start + 12
 	userUuid = json[start:end]
 	if username in muteList:
+		status, reason, stream = mod.removetext(userUuid)
+		return
+	if userUuid in muidList:
 		status, reason, stream = mod.removetext(userUuid)
 		return
 	i = findUser(userUuid)
@@ -389,6 +404,7 @@ def handlePM(json, mod):
 	status, reason, stream = mod.openbox(userUuid)
 	#print("[debug]: opened message box")
 	userText = getText(stream)
+	pmsg = stream
 	#print("[debug]:", username, "$", userText)
 	if userText[:4] == "ban ":
 		targetUsername = userText[4:]
@@ -418,7 +434,15 @@ def handlePM(json, mod):
 		status, reason, stream = mod.private(userUuid, text)
 	elif userText == "clear mute":
 		muteList.clear()
+		muidList.clear()
 		status, reason, stream = mod.private(userUuid, "mute list cleared")
+	elif userText == "list all":
+		for user in userList:
+			text = user.username + ": " + user.userUuid
+			text = text.replace("\"", "\\\"")
+			status, reason, stream = mod.private(userUuid, text)
+		if len(userList) <= 0:
+			status, reason, stream = mod.private(userUuid, "no user in the list")
 	elif userText[:7] == "remove ":
 		targetUsername = userText[7:]
 		targetUserUuid = mod.search(targetUsername)
@@ -435,6 +459,37 @@ def handlePM(json, mod):
 		elif state == "off":
 			mod.filter = False
 			status, reason, stream = mod.private(userUuid, "guest filter set off")
+	elif userText[:5] == "iban ":
+		targetUserUuid = userText[5:]
+		if targetUserUuid != None:
+			status, reason, stream = mod.userban(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, "user was found")
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif userText[:7] == "iunban ":
+		targetUserUuid = userText[7:]
+		if targetUserUuid != None:
+			status, reason, stream = mod.userunban(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, "user was found")
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif userText[:6] == "imute ":
+		targetUserUuid = userText[6:]
+		muidList.append(targetUserUuid)
+		text = "muted " + targetUserUuid
+		status, reason, stream = mod.private(userUuid, text)
+	elif userText[:8] == "iunmute ":
+		targetUserUuid = userText[8:]
+		muidList.remove(targetUserUuid)
+		text = "unmuted " + targetUserUuid
+		status, reason, stream = mod.private(userUuid, text)
+	elif userText[:8] == "iremove ":
+		targetUserUuid = userText[8:]
+		if targetUserUuid != None:
+			status, reason, stream = mod.removetext(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, "user was found")
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
 	elif userText[:8] == "inquire ":
 		targetUsername = userText[8:]
 		i = seekUser(targetUsername)
@@ -445,9 +500,101 @@ def handlePM(json, mod):
 				status, reason, stream = mod.private(userUuid, attr)
 		else:
 			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif userText[:7] == "friend ":
+		targetUsername = userText[7:]
+		targetUserUuid = mod.search(targetUsername)
+		if targetUserUuid != None:
+			status, reason, stream = mod.addfriend(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, "user was found")
+			friend = {}
+			friend["lasts"] = int(time.time())
+			friend["state"] = ""
+			frndDict[targetUserUuid] = friend
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif userText[:9] == "unfriend ":
+		targetUsername = userText[9:]
+		targetUserUuid = mod.search(targetUsername)
+		if targetUserUuid != None:
+			status, reason, stream = mod.removefriend(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, "user was found")
+			try:
+				del frndDict[targetUserUuid]
+			except:
+				pass
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif userText[:10] == "last seen ":
+		targetUsername = userText[10:]
+		targetUserUuid = mod.search(targetUsername)
+		if targetUserUuid != None:
+			text = calcTime(targetUserUuid)
+			status, reason, stream = mod.private(userUuid, text)
+		else:
+			status, reason, stream = mod.private(userUuid, "no such user was found")
+	elif pmsg.find("\"o\":1") < 0 or pmsg.find("\"o\":2") < 0:
+		status, reason, stream = mod.private(userUuid, "i am only an idiot, watching over the room!")
 	status, reason, stream = mod.closbox(userUuid)
 	#print("[debug]: closed message box")
 	return
+
+def updateFriend(json, mod):
+	start = json.find("\"userUuid\"")
+	end = json.find("\",", start)
+	start = start + 12
+	userUuid = json[start:end]
+	start = json.find("\"username\"")
+	end = json.find("\"}", start)
+	start = start + 12
+	username = json[start:end]
+	username = html.unescape(username)
+	index = json.find("\"isOnline\"")
+	field = json[index + 11:index + 15]
+	isOnline = "in "
+	if field == "fals":
+		isOnline = "out "
+	friend = {}
+	friend["lasts"] = int(time.time())
+	friend["state"] = isOnline
+	frndDict[userUuid] = friend
+
+def calcTime(userUuid):
+	try:
+		friend = frndDict[userUuid]
+		diff = int(time.time()) - friend["lasts"]
+		if diff < 60:
+			t = int(diff)
+			if t <= 1:
+				text = str(t) + " second ago"
+			else:
+				text = str(t) + " seconds ago"
+		elif diff < 3600:
+			t = int(diff / 60)
+			if t <= 1:
+				text = str(t) + " minute ago"
+			else:
+				text = str(t) + " minutes ago"
+		elif diff < 86400:
+			t = int(diff / 3600)
+			if t <= 1:
+				text = str(t) + " hour ago"
+			else:
+				text = str(t) + " hours ago"
+		elif diff < 604800:
+			t = int(diff / 86400)
+			if t <= 1:
+				text = str(t) + " day ago"
+			else:
+				text = str(t) + " days ago"
+		else:
+			t = int(diff / 604800)
+			if t <= 1:
+				text = str(t) + " week ago"
+			else:
+				text = str(t) + " weeks ago"
+		return "logged " + friend["state"] + text
+	except:
+		return "this user is not a friend of mine"
 
 def findUser(userUuid):
 	result = -1
@@ -574,6 +721,9 @@ def main():
 					elif channel == "/meta/connect":
 						if json.find("\"error\":\"402::Unknown client\"") >= 0:
 							user.updateState(False)
+					elif channel[:21] == "/channel/user/friend/":
+						frndThread = threading.Thread(target=updateFriend, args=(json, user, ))
+						frndThread.start()
 				openBrac -= 1
 	status, reason, stream = user.logout()
 	return
