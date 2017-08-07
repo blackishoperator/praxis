@@ -247,22 +247,18 @@ class Observer(threading.Thread):
 				status, reason, stream = self.connect()
 				#print("[debug]: received new json")
 			except:
+				print("[error]: connection is lost")
 				self.conn.close()
 				self.join_room()
-				print("[error]: connection is lost")
 				continue
-			#s = time.time()
 			rspn = stream
 			#if rspn.find("9cd92a17-22c3-4c83-ab26-32bef7b01cc0") < 0:
 			data = json.loads(rspn)
 			for obj in data:
 				if obj['channel'] != "/meta/connect":
 					q.put(obj)
-					#print(obj)
 				else:
 					self.alive = obj['successful']
-			#e = time.time()
-			#print(s, e, e - s)
 			if shr.get_cnid() > 256:
 				self.conn.close()
 				self.join_room()
@@ -328,7 +324,7 @@ class Processor(threading.Thread):
 
 	def user_join(self, userUuid, username, isGuest):
 		if self.filter == True and isGuest == True:
-			pass 
+			pass
 			#status, reason, stream = mod.userban(userUuid)
 			#p.put([0, userUuid])
 		else:
@@ -369,6 +365,19 @@ class Processor(threading.Thread):
 				break
 		return result
 
+	def seek_user(self, username):
+		for user in self.userList:
+			temp = username
+			ratio = len(user.username.lower()) / len(username)
+			if ratio >= 4:
+				continue
+			for char in user.username.lower():
+				if char == temp[0]:
+					temp = temp[1:]
+					if len(temp) <= 1:
+						return user.userUuid
+		return None
+
 	def private_add(self, msg, key):
 		userOrdr = msg['o'] - 1
 		userText = html.unescape(msg['m'])
@@ -380,7 +389,7 @@ class Processor(threading.Thread):
 			userUuid = key[36:]
 		else:
 			print("[error]: unexpected order", msg['o'])
-			if key[:36] != "9cd92a17-22c3-4c83-ab26-32bef7b01cc0":
+			if key[:36] != "2abcce47-eda0-443d-a382-78bb4b45045e": #"9cd92a17-22c3-4c83-ab26-32bef7b01cc0"
 				userUuid = key[:36]
 			else:
 				userUuid = key[36:]
@@ -392,19 +401,23 @@ class Processor(threading.Thread):
 			target = userText[6:]
 			task = 1
 		elif userText[:7] == "remove ":
-			target = userText[7:]	
+			target = userText[7:]
 			task = 2
+		else:
+			p.put([5, userUuid, "i am not smart enough to interpert your order, blame it on my creator's stupidity"])
 		if task < 3:
 			if len(target) == 36 and target[8] == "-" and target[13] == "-" and target[18] == "-" and target[23] == "-":
 				targetUserUuid = target
 			else:
+				targetUserUuid = self.seek_user(target)
+			if targetUserUuid == None:
 				targetUserUuid = self.search(target)
 			if targetUserUuid != None:
 				p.put([task, targetUserUuid])
 				p.put([5, userUuid, "user was found"])
 				if task == 0:
 					for user in self.userList:
-						if user.userUuid == userUuid:
+						if user.userUuid == targetUserUuid:
 							self.userList.remove(user)
 			else:
 				p.put([5, userUuid, "no such user was found"])
@@ -627,7 +640,7 @@ class Faker(threading.Thread):
 		body = "[{\"channel\":\"/meta/connect\",\"connectionType\":\"long-polling\",\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
 		self.cntId += 1
 		return self.send_recv("POST", 4, body)
-		
+
 	def context(self):
 		body = "[{\"channel\":\"/service/user/context/self/complete\",\"data\":{},\"id\":\"" + str(self.cntId) + "\"," + self.clntId + "}]"
 		self.cntId += 1
@@ -654,9 +667,9 @@ class Faker(threading.Thread):
 			try:
 				status, reason, stream = self.connect()
 			except:
+				print("[error]: connection is lost")
 				self.conn.close()
 				self.join_room()
-				print("[error]: connection is lost")
 				continue
 			if stream.find("\"error\":\"402::Unknown client\"") >= 0 or shr.exit == True:
 				self.alive = False
