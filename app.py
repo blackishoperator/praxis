@@ -415,10 +415,10 @@ class Processor(threading.Thread):
 			if targetUserUuid != None:
 				p.put([task, targetUserUuid])
 				p.put([5, userUuid, "user was found"])
-				if task == 0:
-					for user in self.userList:
-						if user.userUuid == targetUserUuid:
-							self.userList.remove(user)
+				#if task == 0:
+					#for user in self.userList:
+						#if user.userUuid == targetUserUuid:
+							#self.userList.remove(user)
 			else:
 				p.put([5, userUuid, "no such user was found"])
 		return
@@ -623,6 +623,7 @@ class Faker(threading.Thread):
 		return status, reason, stream
 
 	def handshake(self):
+		self.cntId = 2
 		body = "[{\"ext\":{\"chatroomId\":" + self.roomId + "},\"version\":\"1.0\",\"minimumVersion\":\"0.9\",\"channel\":\"/meta/handshake\",\"supportedConnectionTypes\":[\"long-polling\",\"callback-polling\"],\"advice\":{\"timeout\":60000,\"interval\":0},\"id\":\"1\"}]"
 		status, reason, stream = self.send_recv("POST", 3, body)
 		rspn = str(stream)
@@ -673,7 +674,7 @@ class Faker(threading.Thread):
 				continue
 			if stream.find("\"error\":\"402::Unknown client\"") >= 0 or shr.exit == True:
 				self.alive = False
-			if self.cntId > 256:
+			elif self.cntId > 256:
 				self.conn.close()
 				self.join_room()
 				print("[debug]: maximum number of requests reached")
