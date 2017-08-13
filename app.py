@@ -14,7 +14,7 @@ direct = ["/authentication/guest",	#0
 		  "/cometd/connect",		#4
 		  "/cometd/"]				#5
 
-trstList = ["pixie", "Aallii", "loVely gaK", "sweety gak", "Nazanin_", "Artist Painter", "azizi", "GrumpyPersianCat"]
+trstList = ["pixie", "Aallii", "loVely gaK", "sweety gak", "Nazanin_", "Artist Painter", "azizi", "Araz"]
 
 offence1 = ["fuck", "shit", "scum", "retarded", "ass", "arse", "gay", "homo", "rape"]
 offence2 = ["sex", "cunt", "wank", "bitch"]
@@ -93,7 +93,7 @@ class User():
 		self.spam = 0
 		if isGuest == True:
 			self.repLimit = 2
-			self.capLimit = 8
+			self.capLimit = 4
 			self.swrLimit = 2
 			self.mutLimit = 8
 		else:
@@ -106,9 +106,10 @@ class User():
 		else:
 			self.isTrusted = False
 
-	def checkUser(self, userText):
+	def check_user(self, userText):
 		if self.isTrusted == True:
 			self.lastText = userText
+			self.mute = False
 			return
 		if self.lastText == userText:
 			self.repeated += 1
@@ -235,6 +236,8 @@ class Observer(threading.Thread):
 		status, reason, stream = self.handshake()
 		status, reason, stream = self.metacon()
 		status, reason, stream = self.context()
+		data = json.loads(stream)
+		q.put(data[0])
 		self.alive = True
 		shr.exit = False
 		return
@@ -251,9 +254,7 @@ class Observer(threading.Thread):
 				self.conn.close()
 				self.join_room()
 				continue
-			rspn = stream
-			#if rspn.find("9cd92a17-22c3-4c83-ab26-32bef7b01cc0") < 0:
-			data = json.loads(rspn)
+			data = json.loads(stream)
 			for obj in data:
 				if obj['channel'] != "/meta/connect":
 					q.put(obj)
@@ -273,6 +274,7 @@ class Processor(threading.Thread):
 	def __init__(self, usrnme, passwd, roomId):
 		threading.Thread.__init__(self)
 		self.userList = []
+		self.textDict = {}
 		self.usrnme = usrnme
 		self.passwd = passwd
 		self.roomId = roomId
@@ -316,17 +318,27 @@ class Processor(threading.Thread):
 				except:
 					print("[error]: json format has changed for /service/conversation/message")
 					pass
+			elif obj['channel'] == "/service/user/context/self/complete":
+				try:
+					self.prepare_list(obj['data']['chatroomContext']['data']['messages'])
+				except:
+					print("[error]: json format has changed for /service/user/context/self/complete")
+					pass
 			#elif obj['channel'] == "/service/conversation/notification/added":
 				#self.notify_add(obj)
 			#elif obj['channel'][:21] == "/channel/user/friend/":
 				#pass
 		return
 
+	def prepare_list(self, textList):
+		self.textDict = {}
+		for text in textList:
+			self.textDict[text['userUuid']] = text['username']
+		return
+
 	def user_join(self, userUuid, username, isGuest):
 		if self.filter == True and isGuest == True:
-			pass
-			#status, reason, stream = mod.userban(userUuid)
-			#p.put([0, userUuid])
+			p.put([0, userUuid])
 		else:
 			user = User(username, userUuid, isGuest)
 			self.userList.append(user)
@@ -347,10 +359,13 @@ class Processor(threading.Thread):
 	def message_add(self, userUuid, username, userText):
 		i = self.find_user(userUuid)
 		if i >= 0:
-			self.userList[i].checkUser(userText)
+			self.userList[i].check_user(userText)
 			if self.userList[i].mute == True:
 				p.put([2, userUuid])
 				self.userList[i].inMute += 1
+				self.textDict.pop(userUuid, None)
+			else:
+				self.textDict[userUuid] = username
 		else:
 			user = User(username, userUuid, False)
 			self.userList.append(user)
@@ -368,7 +383,7 @@ class Processor(threading.Thread):
 	def seek_user(self, username):
 		for user in self.userList:
 			temp = username
-			ratio = len(user.username.lower()) / len(username)
+			ratio = len(user.username) / len(username)
 			if ratio >= 4:
 				continue
 			for char in user.username.lower():
@@ -376,6 +391,19 @@ class Processor(threading.Thread):
 					temp = temp[1:]
 					if len(temp) <= 1:
 						return user.userUuid
+		return None
+
+	def seek_text(self, username):
+		for userUuid in self.textDict.keys():
+			temp = username
+			ratio = len(self.textDict[userUuid]) / len(username)
+			if ratio >= 4:
+				continue
+			for char in self.textDict[userUuid].lower():
+				if char == temp[0]:
+					temp = temp[1:]
+					if len(temp) <= 1:
+						return userUuid
 		return None
 
 	def private_add(self, msg, key):
@@ -403,11 +431,33 @@ class Processor(threading.Thread):
 		elif userText[:7] == "remove ":
 			target = userText[7:]
 			task = 2
+		elif userText == "clear":
+			for uuid in self.textDict.keys():
+				p.put([2, uuid])
+			self.textDict.clear()
+			p.put([5, userUuid, "room is partly cleared"])
+		elif userText == "list":
+			for user in self.userList:
+				text = user.userUuid + " : " + json.dumps(user.username).strip("\"")
+				p.put([5, userUuid, text])
+			if len(self.userList) <= 0:
+				p.put([5, userUuid, "room is quite empty"])
+		elif userText[:7] == "filter ":
+			if userText[7:] == "on":
+				self.filter = True
+				p.put([5, userUuid, "guest filter is set on"])
+			elif userText[7:] == "off":
+				self.filter = False
+				p.put([5, userUuid, "guest filter is set off"])
+			else:
+				p.put([5, userUuid, "unknown command"])
 		else:
 			p.put([5, userUuid, "i am not smart enough to interpert your order, blame it on my creator's stupidity"])
 		if task < 3:
 			if len(target) == 36 and target[8] == "-" and target[13] == "-" and target[18] == "-" and target[23] == "-":
 				targetUserUuid = target
+			elif task == 2:
+				targetUserUuid = self.seek_text(target)
 			else:
 				targetUserUuid = self.seek_user(target)
 			if targetUserUuid == None:
@@ -415,10 +465,8 @@ class Processor(threading.Thread):
 			if targetUserUuid != None:
 				p.put([task, targetUserUuid])
 				p.put([5, userUuid, "user was found"])
-				#if task == 0:
-					#for user in self.userList:
-						#if user.userUuid == targetUserUuid:
-							#self.userList.remove(user)
+				if task == 2:
+					self.textDict.pop(targetUserUuid, None)
 			else:
 				p.put([5, userUuid, "no such user was found"])
 		return
