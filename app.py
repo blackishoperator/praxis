@@ -452,6 +452,9 @@ class Processor(threading.Thread):
 		return
 
 	def prepare_list(self, users, texts, banned_uuids):
+		self.room.users.clear()
+		self.room.texts.clear()
+		self.room.banned_uuids.clear()
 		for uuid in users.keys():
 			self.room.add_user(users[uuid]['username'], uuid, users[uuid]['isGuest'])
 		for text in texts:
