@@ -871,9 +871,9 @@ class Faker(threading.Thread):
 shr = Shared()
 
 def main():
-	usrnme = "m@non!c"
-	passwd = "!SAAC*"
-	roomId = "207920"
+	usrnme = "Iran_Is_Safe"
+	passwd = "frlm"
+	roomId = "215315"
 	fod = Faker(["awkward_silence", "breathing_corpse"], "frlm", roomId)
 	fod.start()
 	sod = Faker(["salad shirazi", "solmaz"], "frlm", roomId)
