@@ -470,15 +470,11 @@ class Processor(threading.Thread):
 		else:
 			self.room.add_user(user_name, user_uuid, isGuest)
 			print("[debug]: user joined")
-		if user_name == "GrumpyPersianCat":
-			task_q.put([7, user_uuid])
 		return
 
 	def user_left(self, user_uuid):
 		user, index = self.room.seek_user_by_uuid(user_uuid)
 		self.room.del_user(index)
-		if user.name == "GrumpyPersianCat":
-			task_q.put([6, user_uuid])
 		print("[debug]: user left")
 		return
 
@@ -883,7 +879,6 @@ def main():
 	sod.start()
 	rod = Faker(["biqam", "razor"], "frlm", roomId)
 	rod.start()
-	time.sleep(2)
 	pod = Observer(usrnme, passwd, roomId)
 	pod.start()
 	mod = Processor(usrnme, passwd, roomId)
