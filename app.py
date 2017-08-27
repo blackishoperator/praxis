@@ -559,17 +559,18 @@ class Processor(threading.Thread):
 		return
 
 	def update_filter(self, flag, user_uuid):
+		last_state = self.filter
 		if flag == "on":
 			self.filter = True
 			self.set_filter = int(time.time())
-			if self.filter == True:
+			if last_state == True:
 				task_q.put([5, user_uuid, "guest filter has been set on already"])
 			else:
 				task_q.put([5, user_uuid, "guest filter is set on"])
-		if flag == "off":
+		elif flag == "off":
 			self.filter = False
 			self.set_filter = 0
-			if self.filter == False:
+			if last_state == False:
 				task_q.put([5, user_uuid, "guest filter has been set off already"])
 			else:
 				task_q.put([5, user_uuid, "guest filter is set off"])
@@ -578,17 +579,18 @@ class Processor(threading.Thread):
 		return
 
 	def update_locked(self, flag, user_uuid):
+		last_state = self.locked
 		if flag == "lock":
 			self.locked = True
 			self.set_locked = int(time.time())
-			if self.locked == True:
+			if last_state == True:
 				task_q.put([5, user_uuid, "room has been locked already"])
 			else:
 				task_q.put([5, user_uuid, "room is locked"])
-		if flag == "unlock":
+		elif flag == "unlock":
 			self.locked = False
 			self.set_locked = 0
-			if self.locked == False:
+			if last_state == False:
 				task_q.put([5, user_uuid, "room has been unlocked already"])
 			else:
 				task_q.put([5, user_uuid, "room is unlocked"])
