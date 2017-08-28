@@ -452,10 +452,13 @@ class Processor(threading.Thread):
 				except:
 					print("[error]: json format has changed for", obj['channel'])
 					pass
-			if self.locked == True and int(time.time()) - self.set_locked > 60:
+			if self.locked == True and int(time.time()) - self.set_locked > 120:
 				self.locked = False
 				self.set_locked = 0
-			if self.filter == True and int(time.time()) - self.set_filter > 60:
+				for uuid in self.room.banned_uuids.keys():
+					task_q.put([1, uuid])
+				self.room.banned_uuids.clear()
+			if self.filter == True and int(time.time()) - self.set_filter > 120:
 				self.filter = False
 				self.set_filter = 0
 		return
@@ -475,6 +478,7 @@ class Processor(threading.Thread):
 	def user_join(self, user_uuid, user_name, isGuest):
 		if self.locked == True or (self.filter == True and isGuest == True):
 			task_q.put([0, user_uuid])
+			self.room.add_banned_uuid(user_name, user_uuid)
 		else:
 			self.room.add_user(user_name, user_uuid, isGuest)
 			print("[debug]: user joined")
@@ -548,7 +552,7 @@ class Processor(threading.Thread):
 			self.room.texts.clear()
 			task_q.put([5, user_uuid, "room is fairly cleared"])
 		elif user_text == "free":
-			for uuid in self.room.banned_uuids:
+			for uuid in self.room.banned_uuids.keys():
 				task_q.put([1, uuid])
 			self.room.banned_uuids.clear()
 			task_q.put([5, user_uuid, "ban list is cleared"])
@@ -593,6 +597,9 @@ class Processor(threading.Thread):
 			if last_state == False:
 				task_q.put([5, user_uuid, "room has been unlocked already"])
 			else:
+				for uuid in self.room.banned_uuids.keys():
+					task_q.put([1, uuid])
+				self.room.banned_uuids.clear()
 				task_q.put([5, user_uuid, "room is unlocked"])
 		return
 
@@ -605,8 +612,8 @@ class Processor(threading.Thread):
 		task_q.put([5, user_uuid, "mute [username]: removes texts by the specified user right at the time they appear"])
 		task_q.put([5, user_uuid, "unmute [username]: unmutes the specified user"])
 		task_q.put([5, user_uuid, "lastseen [username]: due to user privacy issues, this command is currently deactivated"])
-		task_q.put([5, user_uuid, "fliter [on/off]: sets guest filter on or off, it remains on for 1 minute"])
-		task_q.put([5, user_uuid, "lock: stops users from joining the room, it remains on for 1 minute"])
+		task_q.put([5, user_uuid, "fliter [on/off]: sets guest filter on or off, it remains on for 2 minutes"])
+		task_q.put([5, user_uuid, "lock: stops users from joining the room, it remains on for 2 minutes"])
 		task_q.put([5, user_uuid, "unlock: allows all users to join the room, clears ban list for false user bans"])
 		task_q.put([5, user_uuid, "clear: removes all texts in the main chat box"])
 		task_q.put([5, user_uuid, "list: lists some info about all the users that the bot currently inspects"])
