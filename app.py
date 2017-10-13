@@ -570,8 +570,11 @@ class Processor(threading.Thread):
 		return
 
 	def set_timeout(period, user_uuid):
-		self.timeout = period * 60
-		task_q.put([5, user_uuid, "timeout period has been updated"])
+		try:
+			self.timeout = int(period) * 60
+			task_q.put([5, user_uuid, "timeout period has been updated"])
+		except:
+			task_q.put([5, user_uuid, "timeout period must be a plain number indicating minutes only"])
 		return
 
 	def restart_machine(self, user_uuid):
