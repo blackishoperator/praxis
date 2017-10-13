@@ -390,7 +390,11 @@ class Observer(threading.Thread):
 				self.conn.close()
 				self.join_room()
 			if shr.exit == True:
+<<<<<<< HEAD
 				self.alive = False
+=======
+				self.alive == False
+>>>>>>> f6fd858e4dd0041cad131ae13530dfaac90e1708
 		data_q.put(None)
 		task_q.put(None)
 		shr.exit = True
@@ -541,8 +545,11 @@ class Processor(threading.Thread):
 			self.update_filter(user_text[7:], user_uuid)
 		elif user_text[:8] == "timeout ":
 			self.set_timeout(user_text[8:], user_uuid)
+<<<<<<< HEAD
 		elif user_text[:4] == "say ":
 			self.say_text(user_text[4:], user_uuid)
+=======
+>>>>>>> f6fd858e4dd0041cad131ae13530dfaac90e1708
 		elif user_text == "lock":
 			self.update_locked("lock", user_uuid)
 		elif user_text == "unlock":
@@ -571,12 +578,16 @@ class Processor(threading.Thread):
 			task_q.put([5, user_uuid, "can not understand your order, type help if you need it"])
 		return
 
+<<<<<<< HEAD
 	def say_text(self, user_text, user_uuid):
 		task_q.put([8, user_text])
 		task_q.put([5, user_uuid, "the given text has been posted in public chat"])
 		return
 
 	def set_timeout(self, period, user_uuid):
+=======
+	def set_timeout(period, user_uuid):
+>>>>>>> f6fd858e4dd0041cad131ae13530dfaac90e1708
 		try:
 			self.timeout = int(period) * 60
 			task_q.put([5, user_uuid, "timeout period has been updated"])
@@ -639,7 +650,10 @@ class Processor(threading.Thread):
 		task_q.put([5, user_uuid, "mute [username]: removes texts by the specified user right at the time they appear"])
 		task_q.put([5, user_uuid, "unmute [username]: unmutes the specified user"])
 		task_q.put([5, user_uuid, "lastseen [username]: due to user privacy issues, this command is currently deactivated"])
+<<<<<<< HEAD
 		task_q.put([5, user_uuid, "say [text]: posts the given text in public chat"])
+=======
+>>>>>>> f6fd858e4dd0041cad131ae13530dfaac90e1708
 		task_q.put([5, user_uuid, "filter [on/off]: sets guest filter on or off, it remains on for 2 minutes"])
 		task_q.put([5, user_uuid, "lock: stops users from joining the room, it remains on for 2 minutes"])
 		task_q.put([5, user_uuid, "unlock: allows all users to join the room, clears ban list for false user bans"])
