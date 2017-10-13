@@ -389,6 +389,8 @@ class Observer(threading.Thread):
 				print("[debug]: maximum number of requests reached")
 				self.conn.close()
 				self.join_room()
+			if shr.exit == True:
+				self.alive == False
 		data_q.put(None)
 		task_q.put(None)
 		shr.exit = True
@@ -407,6 +409,7 @@ class Processor(threading.Thread):
 		self.room = Room()
 		self.set_locked = 0
 		self.set_filter = 0
+		self.timeout = 120
 
 	def run(self):
 		while True:
@@ -452,13 +455,13 @@ class Processor(threading.Thread):
 				except:
 					print("[error]: json format has changed for", obj['channel'])
 					pass
-			if self.locked == True and int(time.time()) - self.set_locked > 120:
+			if self.locked == True and int(time.time()) - self.set_locked > self.timeout:
 				self.locked = False
 				self.set_locked = 0
 				for uuid in self.room.banned_uuids.keys():
 					task_q.put([1, uuid])
 				self.room.banned_uuids.clear()
-			if self.filter == True and int(time.time()) - self.set_filter > 120:
+			if self.filter == True and int(time.time()) - self.set_filter > self.timeout:
 				self.filter = False
 				self.set_filter = 0
 		return
@@ -536,6 +539,8 @@ class Processor(threading.Thread):
 			self.make_task_3(6, user_text[7:], user_uuid)
 		elif user_text[:7] == "filter ":
 			self.update_filter(user_text[7:], user_uuid)
+		elif user_text[:8] == "timeout ":
+			self.set_timeout(user_text[8:], user_uuid)
 		elif user_text == "lock":
 			self.update_locked("lock", user_uuid)
 		elif user_text == "unlock":
@@ -556,10 +561,22 @@ class Processor(threading.Thread):
 				task_q.put([1, uuid])
 			self.room.banned_uuids.clear()
 			task_q.put([5, user_uuid, "ban list is cleared"])
+		elif user_text == "restart":
+			self.restart_machine(user_uuid)
 		elif user_text == "help":
 			self.help_user(user_uuid)
 		else:
 			task_q.put([5, user_uuid, "can not understand your order, type help if you need it"])
+		return
+
+	def set_timeout(period, user_uuid):
+		self.timeout = period * 60
+		task_q.put([5, user_uuid, "timeout period has been updated"])
+		return
+
+	def restart_machine(self, user_uuid):
+		task_q.put([5, user_uuid, "the bot will restart within a minute"])
+		shr.exit = True
 		return
 
 	def update_filter(self, flag, user_uuid):
@@ -612,11 +629,13 @@ class Processor(threading.Thread):
 		task_q.put([5, user_uuid, "mute [username]: removes texts by the specified user right at the time they appear"])
 		task_q.put([5, user_uuid, "unmute [username]: unmutes the specified user"])
 		task_q.put([5, user_uuid, "lastseen [username]: due to user privacy issues, this command is currently deactivated"])
-		task_q.put([5, user_uuid, "fliter [on/off]: sets guest filter on or off, it remains on for 2 minutes"])
+		task_q.put([5, user_uuid, "filter [on/off]: sets guest filter on or off, it remains on for 2 minutes"])
 		task_q.put([5, user_uuid, "lock: stops users from joining the room, it remains on for 2 minutes"])
 		task_q.put([5, user_uuid, "unlock: allows all users to join the room, clears ban list for false user bans"])
+		task_q.put([5, user_uuid, "timeout [minutes]: sets prefered timeout for guest filter and room lockout"])
 		task_q.put([5, user_uuid, "clear: removes all texts in the main chat box"])
 		task_q.put([5, user_uuid, "list: lists some info about all the users that the bot currently inspects"])
+		task_q.put([5, user_uuid, "restart: restarts the bots and all users logs will be lost in return"])
 		return
 
 	def make_task_0(self, target, user_uuid):
