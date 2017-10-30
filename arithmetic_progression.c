@@ -3,19 +3,18 @@
 #define A_SIZE sizeof(A) / sizeof(int)
 
 int main() {
-    int A[10] = {1,2,3,4,5,6,7,8,9,10};
-    int T[99];
+    int A[] = {1,2,3,4,6,7,9};
+    int T[30] = {};
     int i = 1;
     int j = 0;
     int k = 0;
     int l = 0;
-
+    //checking possible choices of triples
     for(i = 1; i < A_SIZE - 1; i++) {
         for(j = 0; j < i; j++) {
             for(k = i + 1; k < A_SIZE; k++) {
-                printf("A[%d] = %d\tA[%d] = %d\tA[%d] = %d\n", j, A[j], i, A[i], k, A[k]);
-                if(A[j] - A[i] < A[k] - A[i]) break;
-                if(A[j] - A[i] == A[k] - A[i]) {
+                if(A[i] - A[j] < A[k] - A[i]) break;
+                if(A[i] - A[j] == A[k] - A[i]) {
                     T[l++] = A[j];
                     T[l++] = A[i];
                     T[l++] = A[k];
@@ -23,10 +22,17 @@ int main() {
             }
         }
     }
-    
-    for(i = 0; i < l; i++)
-        printf("%d\t", T[i]);
-    printf("\n");
+    //print output array T
+    for(i = 0; i < l; i++) {
+        if(i % 3 == 0)
+            printf("(");
+        printf("%d", T[i]);
+        if(i % 3 != 2)
+            printf(" ");
+        else
+            printf(")\n");
+        
+    }
 
     return 0;
 }
